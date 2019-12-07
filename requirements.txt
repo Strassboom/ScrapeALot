@@ -1,0 +1,4 @@
+arrow==0.15.4
+google-cloud-bigquery==1.22.0
+lxml==4.4.2
+requests==2.22.0
