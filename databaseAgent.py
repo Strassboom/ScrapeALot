@@ -16,7 +16,7 @@ class BaseTool:
     # Executes when instance defined in 'with' block is removed from memory
     def __exit__(self, type, value, tb):
         for dataset_id in [d.dataset_id for d in self.client.list_datasets(self.client.project)]:
-            self.client.delete_dataset(dataset_id, delete_contents=True, not_found_ok=True)  # Make an API request.
+            self.client.delete_dataset(dataset_id, delete_contents=True, not_found_ok=True)
             print("Deleted dataset '{}'".format(dataset_id))
 
     # creates a new dataset with an option for custom naming
@@ -34,7 +34,6 @@ class BaseTool:
 
     # attempts to change the current mounted dataset
     def setDataSet(self,customName):
-        #candidate_dataset_id = "{}.{}".format(self.client.project,customName.replace(" ",""))
         dataset_exists = lambda x: True if x in [d.dataset_id for d in self.client.list_datasets(self.client.project)] else False
         if dataset_exists(customName):
             self.dataset_id = customName
@@ -96,12 +95,48 @@ class BaseTool:
                 )
 
     def outputTables(self,tables):
-        print("Tables:")  # Make an API request(s).
+        print("Tables:")
         if tables:
             for table in tables:
                 print("\t{}".format(table.table_id))
         else:
             print("\tThis dataset does not contain any tables.")
+
+    # table_id: "your-project.your_dataset.your_table"
+    # rows: 2d list where each element is a row
+    def insertDefaultTableRows(self,table_id,rows):
+        table = self.client.get_table(table_id)
+        query_job = self.client.query(f"""SELECT ID FROM `{self.client.project}.{self.dataset_id}.Terminals`""")
+        terminals = query_job.result()
+
+        print("Query results loaded to the table {}".format(table_id))
+        errors = self.client.insert_rows(table, rows)
+        if errors == []:
+            print("New rows have been added.")
+        pass
+
+    def insertTableRows(self,table_id,rows):
+        table = self.client.get_table(table_id)
+        
+        if table_id.split(".")[2] == "EntryInfo":
+            terminalTable = self.client.get_table(f"{self.client.project}.{self.dataset_id}.Terminals")
+            entryTable = self.client.get_table(f"{self.client.project}.{self.dataset_id}.EntryTimes")
+            terminals = {x["Name"]:x["ID"] for x in self.client.list_rows(f"{self.client.project}.{self.dataset_id}.Terminals",selected_fields=terminalTable.schema)}
+            timeentryid = [x["ID"] for x in self.client.list_rows(f"{self.client.project}.{self.dataset_id}.EntryTimes",selected_fields=entryTable.schema)]
+            timeentryid = len(timeentryid) + 1
+            self.client.insert_rows(entryTable,[[timeentryid,rows[0][0]]])
+            for row in rows:
+                try:
+                    row[1] = terminals[row[1]]                    
+                except KeyError:
+                    newTerminalID = max([x for x in terminals.keys()])+1
+                    self.client.insert_rows(terminalTable,[[newTerminalID,row[1]]])
+                    row[1] = newTerminalID
+                row[0] = timeentryid
+
+        errors = self.client.insert_rows(table, rows)
+        if errors == []:
+            print("New rows have been added.")
 
 
 def fullOperation():
@@ -109,7 +144,9 @@ def fullOperation():
         bqClient.dataset_id = bqClient.createDataset()
         bqClient.setDataSet(bqClient.dataset_id)
         bqClient.createDefaultTables()
-    pass
+        bqClient.insertDefaultTableRows(f"{bqClient.client.project}.{bqClient.dataset_id}.Terminals",[[1,"A"],[2,"B"],[3,"C/D"]])
+        bqClient.insertTableRows(f"{bqClient.client.project}.{bqClient.dataset_id}.EntryInfo",[["1575789100","C/D",0.5],["1575789100","B",0.2],["1575789100","A",0.9]])
+        pass
 
 if __name__ == "__main__":
     fullOperation()
