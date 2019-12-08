@@ -20,7 +20,7 @@ class BaseTool:
             print("Deleted dataset '{}'".format(dataset_id))
 
     # creates a new dataset with an option for custom naming
-    def createDataset(self,customName=str(arrow.now().timestamp),country="US"):
+    def createDataset(self,customName=str(arrow.utcnow().timestamp),country="US"):
         dataset_id = "{}.{}".format(self.client.project,customName.replace(" ",""))
         dataset_already_exists = lambda x: True if x in [d.dataset_id for d in self.client.list_datasets(self.client.project)] else False
         if dataset_already_exists(customName):
