@@ -9,21 +9,29 @@ class BaseTool:
         self.client = bigquery.Client()
         self.dataset_id = ""
 
-    def setDatasetId(self, customName=arrow.now().format("YY-MM-DD-HH-mm-ss")):
-        candidate_dataset_id = "{}_{}.your_dataset".format(client.project,customName)
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, tb):
+        for dataset_id in [d.dataset_id for d in self.client.list_datasets(self.client.project)]:
+            self.client.delete_dataset(dataset_id, delete_contents=True, not_found_ok=True)  # Make an API request.
+            print("Deleted dataset '{}'.".format(dataset_id))
+
+    def __setDatasetId__(self, customName=arrow.now().format("YY-MM-DD-HH-mm-ss")):
+        candidate_dataset_id = "{}.{}".format(self.client.project,customName.replace(" ",""))
         dataset_exists = lambda x: True if x in [d.dataset_id for d in self.client.list_datasets(self.client.project)] else False
-        if dataset_exists(candidate_dataset_id):
-            self.dataset_id = candidate_dataset_id
+        if dataset_exists(customName):
+            self.dataset_id = customName
         else:
             print("Dataset with id {} does not exist yet".format(candidate_dataset_id))
 
     def getDatasetId(self):
         return self.dataset_id
 
-    def createDataset(self,customName,country="US"):
-        dataset_id = "{}_{}.your_dataset".format(self.client.project,customName)
+    def createDataset(self,customName=arrow.now().format("YY-MM-DD-HH-mm-ss"),country="US"):
+        dataset_id = "{}.{}".format(self.client.project,customName.replace(" ",""))
         dataset_already_exists = lambda x: True if x in [d.dataset_id for d in self.client.list_datasets(self.client.project)] else False
-        if dataset_already_exists(dataset_id):
+        if dataset_already_exists(customName):
             print("Dataset with id {} already exists".format(dataset_id))
         else:
             dataset = bigquery.Dataset(dataset_id)
@@ -31,12 +39,15 @@ class BaseTool:
             dataset = self.client.create_dataset(dataset)
             print("Created dataset with id {}".format(dataset.dataset_id))
 
-    def setDataSet(self):
+    def setDataSet(self,customName):
         # Set dataset_id to the ID of the dataset to fetch.
-        if self.dataset_id != "":
-            self.dataset = self.client.get_dataset(self.dataset_id)  # Make an API request.
+        candidate_dataset_id = "{}.{}".format(self.client.project,customName.replace(" ",""))
+        dataset_exists = lambda x: True if x in [d.dataset_id for d in self.client.list_datasets(self.client.project)] else False
+        if dataset_exists(customName):
+            self.dataset_id = customName
+            self.dataset = self.client.get_dataset(self.dataset_id)
         else:
-            print("Client requires a datasetID")
+            print("Dataset with id {} does not exist yet".format(candidate_dataset_id))
 
     def getDataSet(self):
         return self.dataset
@@ -98,6 +109,19 @@ class BaseTool:
 
         createTableQueries = [createTerminals,createEntryTimes,createEntries]
 
+    def createTable(self,customName):
+        table_id = "{}.{}.{}".format(self.client.project,self.dataset_id,customName)
+        schema = [
+        bigquery.SchemaField("ID", "INTEGER", mode="REQUIRED"),
+        bigquery.SchemaField("Name", "STRING", mode="REQUIRED"),
+        ]
+
+        table = bigquery.Table(table_id, schema=schema)
+        table = self.client.create_table(table)  # Make an API request.
+        print(
+            "Created table {}.{}.{}".format(table.project, table.dataset_id, table.table_id)
+        )
+
     def getTables(self,dataset):
        return list(self.client.list_tables(dataset))
 
@@ -122,25 +146,12 @@ class BaseTool:
             print("\tThis dataset does not contain any tables.")
 
 def fullOperation():
-    bqClient = BaseTool()
-    bqClient.setDatasetId("MyFirstDataset")
-    bqClient.setDataSet()
-    bqClient.createDefaultTables(bqClient.dataset)
+    with BaseTool() as bqClient:
+        bqClient.createDataset("MyFirstDataset")
+        bqClient.setDataSet("MyFirstDataset")
+        bqClient.createDefaultTables(bqClient.dataset)
+    pass
 
-# Constructs a BigQuery client object.
-client = bigquery.Client()
-
-# Sets dataset_id to the ID of the dataset to create followed by a timestamp of when it was created.
-dataset_id = "{}_{}.your_dataset".format(client.project,arrow.now().format("YY-MM-DD-HH-mm-ss"))
-
-# Constructs a full Dataset object to send to the API.
-dataset = bigquery.Dataset(dataset_id)
-
-# Specifies the geographic location where the dataset should reside.
-dataset.location = "US"
-
-# Sends the dataset to the API for creation.
-# Raises google.api_core.exceptions.Conflict if the Dataset already
-# exists within the project.
-dataset = client.create_dataset(dataset)  # Make an API request.
-print("Created dataset {}.{}".format(client.project, dataset.dataset_id))
+if __name__ == "__main__":
+    fullOperation()
+    pass
