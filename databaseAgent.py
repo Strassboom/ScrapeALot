@@ -8,6 +8,10 @@ class BaseTool:
     def __init__(self):
         self.client = bigquery.Client()
         self.dataset_id = ""
+        self.dataset_id = self.createDataset()
+        self.setDataSet(self.dataset_id)
+        self.createDefaultTables()
+        #self.insertDefaultTableRows(f"{self.client.project}.{self.dataset_id}.Terminals",getTerminals())
 
     # Executes when instance defined at start of 'with' block
     def __enter__(self):
@@ -107,12 +111,13 @@ class BaseTool:
     def insertDefaultTableRows(self,table_id,rows):
         table = self.client.get_table(table_id)
         query_job = self.client.query(f"""SELECT ID FROM `{self.client.project}.{self.dataset_id}.Terminals`""")
-        terminals = query_job.result()
 
         print("Query results loaded to the table {}".format(table_id))
         errors = self.client.insert_rows(table, rows)
         if errors == []:
             print("New rows have been added.")
+        else:
+            print(errors)
         pass
 
     def insertTableRows(self,table_id,rows):
@@ -138,16 +143,7 @@ class BaseTool:
         if errors == []:
             print("New rows have been added.")
 
-
 def fullOperation():
     with BaseTool() as bqClient:
-        bqClient.dataset_id = bqClient.createDataset()
-        bqClient.setDataSet(bqClient.dataset_id)
-        bqClient.createDefaultTables()
-        bqClient.insertDefaultTableRows(f"{bqClient.client.project}.{bqClient.dataset_id}.Terminals",[[1,"A"],[2,"B"],[3,"C/D"]])
         bqClient.insertTableRows(f"{bqClient.client.project}.{bqClient.dataset_id}.EntryInfo",[["1575789100","C/D",0.5],["1575789100","B",0.2],["1575789100","A",0.9]])
         pass
-
-if __name__ == "__main__":
-    fullOperation()
-    pass
