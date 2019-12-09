@@ -108,7 +108,7 @@ class BaseTool:
     # rows: 2d list where each element is a row
     def insertDefaultTableRows(self,table_id,rows):
         table = self.client.get_table(table_id)
-        query_job = self.client.query(f"""SELECT ID FROM `{self.client.project}.{self.dataset_id}.Terminals`""")
+        #query_job = self.client.query(f"""SELECT ID FROM `{self.client.project}.{self.dataset_id}.Terminals`""")
 
         print("Query results loaded to the table {}".format(table_id))
         errors = self.client.insert_rows(table, rows)
