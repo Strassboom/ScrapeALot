@@ -7,7 +7,6 @@ def getPageContent():
     session = HTMLSession()
     root = session.get("https://www.laguardiaairport.com/to-from-airport/parking")
     root.html.render()
-    #root = html.fromstring(root.html.html)
     return root.html
     
 def getTerminals():

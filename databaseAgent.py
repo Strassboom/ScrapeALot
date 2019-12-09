@@ -1,8 +1,6 @@
 from google.cloud import bigquery
-from credConfig import credentialsPath
 import os
 import arrow
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentialsPath
 
 class BaseTool:
     def __init__(self):
