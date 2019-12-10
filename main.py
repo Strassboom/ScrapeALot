@@ -12,6 +12,7 @@ from lxml import html
 import arrow
 import time
 import atexit
+import pygal
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -44,11 +45,14 @@ def tool():
 
 app = Flask(__name__)
 
+jobTimeout = 30
+appTimeout = jobTimeout - 10
     
-async def getTerminals():
+async def getTerminals(session=""):
     badwords = ["Terminal","Parking"]
-    session = AsyncHTMLSessionFixed()
-    root = await session.get("https://www.laguardiaairport.com/to-from-airport/parking")
+    if session == "":
+        session = AsyncHTMLSessionFixed()
+    root = await session.get("https://www.laguardiaairport.com/to-from-airport/parking",timeout=6)
     await root.html.arender()
     allTerminals = root.html.xpath('.//div[@id="parkingContent"]/div/div[contains(@class,"term-row")]')
     getName = lambda row: "".join([word for word in row.xpath('.//div[@class="tp-h-mod"]')[0].text.split(' ') if word not in badwords])
@@ -56,6 +60,7 @@ async def getTerminals():
     for index,row in enumerate(allTerminals):
         terminalName = getName(row)
         rows.append([index+1,terminalName])
+    session.close()
     return rows
 
 async def getAllData(session=""):
@@ -63,7 +68,7 @@ async def getAllData(session=""):
     timestamp = str(arrow.utcnow().timestamp)
     if session == "":
         session = AsyncHTMLSessionFixed()
-    root = await session.get("https://www.laguardiaairport.com/to-from-airport/parking")
+    root = await session.get("https://www.laguardiaairport.com/to-from-airport/parking",timeout=6)
     await root.html.arender()
     allTerminals = root.html.xpath('.//div[@id="parkingContent"]/div/div[contains(@class,"term-row")]')
     getName = lambda row: "".join([word for word in row.xpath('.//div[@class="tp-h-mod"]')[0].text.split(' ') if word not in badwords])
@@ -75,27 +80,40 @@ async def getAllData(session=""):
         rows.append([timestamp,terminalName,percentage])
     if len(rows) == 0:
         rows = await getAllData(session)
+    session.close()
     return rows
 
 @app.route('/')
 def home():
-    # app.pm = BaseTool()
-    # tool()
-    return redirect(url_for('beans'))
+    return redirect(url_for('trender'))
 
 @app.route('/beans')
 def beans():
-    # loop = asyncio.new_event_loop()
-    # rows = loop.run_until_complete(getAllData())
-    # app.pm.insertTableRows(f"{app.pm.client.project}.{app.pm.dataset_id}.EntryInfo",rows)
     rows = sorted(app.pm.getTableData("EntryInfo"),key=lambda x:ord(x[1][0]))
     return render_template("parkinginfo.html",rows=rows)
 
+@app.route('/trender')
+def trender():
+    line_chart = pygal.Line(fill=True)
+    line_chart.title = 'Browser usage evolution (in %)'
+    rows = sorted(app.pm.getAll(),key=lambda x:x[0].format("YYYY MM DD HH mm ss ZZ"))
+    timestampMin = arrow.get(rows[0][0],"YYYY MM DD HH mm ss ZZ")
+    timestampMax = arrow.get(rows[-1][0],"YYYY MM DD HH mm ss ZZ")
+    line_chart.x_labels = map(str, arrow.Arrow.range("minute",timestampMin,timestampMax))#range(tsMin,tsMax))
+    terminals = set([row[1] for row in rows])
+    data = {}
+    for terminal in terminals:
+        data[terminal] = []
+    for row in rows:
+        data[row[1]].append(row[2])
+    for item in sorted([a for a in data.keys()],key=lambda v:ord(v[0])):
+        line_chart.add(item,data[item])
+    return render_template("aggregate.html",chart=line_chart.render_data_uri(),appTimeout=appTimeout)
 
 if __name__ == "__main__":
     app.pm = BaseTool()
     tool()
     scheduler = BackgroundScheduler(daemon=True)
-    scheduler.add_job(func=tool, trigger="interval", seconds=30)
+    scheduler.add_job(func=tool, trigger="interval", seconds=jobTimeout)
     scheduler.start()
     app.run(host='127.0.0.1', port=8080)

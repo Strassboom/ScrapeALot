@@ -170,7 +170,32 @@ class BaseTool:
                 pass
             return rows
 
+    def getAll(self,table_id="EntryInfo"):
+        fullTableID = lambda x: f"{self.client.project}.{self.dataset_id}.{x}"
+        getTable = lambda x: self.client.get_table(fullTableID(x))
+        listRows = lambda x: self.client.list_rows(f"{self.client.project}.{self.dataset_id}.{x.table_id}", selected_fields=x.schema)
+        terminalTable = getTable("Terminals")
+        terminalQuery = {item["ID"]:item["Name"] for item in listRows(terminalTable)}
+        entryTimeTable = getTable("EntryTimes")
+        entryTimeQuery = {item["ID"]:item["Date"] for item in listRows(entryTimeTable)}
+        latest = max([row for row in listRows(entryTimeTable)], key = lambda x: x["ID"])
+
+        query = f"""
+            SELECT *
+            FROM `{self.client.project}.{self.dataset_id}.EntryInfo`
+        """
+        query_job = self.client.query(query)
+        rows = []
+        fixtime = lambda x: arrow.get(int(entryTimeQuery[x])).to("US/Eastern").format("YYYY MM DD HH mm ss ZZ")
+        for row in query_job.result():
+            rows.append([fixtime(row[0]),terminalQuery[row[1]],row[2]])
+            pass
+        return rows
+
 def fullOperation():
     with BaseTool() as bqClient:
         bqClient.insertTableRows(f"{bqClient.client.project}.{bqClient.dataset_id}.EntryInfo",[["1575789100","C/D",0.5],["1575789100","B",0.2],["1575789100","A",0.9]])
         pass
+
+if __name__=="__main__":
+    fullOperation()
