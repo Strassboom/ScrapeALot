@@ -120,37 +120,37 @@ class BaseTool:
 
     def insertTableRows(self,table_id,rows):
         table = self.client.get_table(table_id)
-        
         if table_id.split(".")[2] == "EntryInfo":
-            terminalTable = self.client.get_table(f"{self.client.project}.{self.dataset_id}.Terminals")
-            entryTimeTable = self.client.get_table(f"{self.client.project}.{self.dataset_id}.EntryTimes")
-            terminals = {x["Name"]:x["ID"] for x in self.client.list_rows(f"{self.client.project}.{self.dataset_id}.Terminals",selected_fields=terminalTable.schema)}
-            timeentryid = [x["ID"] for x in self.client.list_rows(f"{self.client.project}.{self.dataset_id}.EntryTimes",selected_fields=entryTimeTable.schema)]
-            timeentryid = len(timeentryid) + 1
-            print(timeentryid,rows)
-            self.client.insert_rows(entryTimeTable,[[timeentryid,rows[0][0]]])
-            for row in rows:
-                try:
-                    row[1] = terminals[row[1]]                    
-                except KeyError:
-                    newTerminalID = 1
-                    if len([x for x in terminals.keys()]) > 0:
-                        newTerminalID = max([x for x in terminals.values()])+1
-                    self.client.insert_rows(terminalTable,[[newTerminalID,row[1]]])
-                    row[1] = newTerminalID
-                    terminals = {x["Name"]:x["ID"] for x in self.client.list_rows(f"{self.client.project}.{self.dataset_id}.Terminals",selected_fields=terminalTable.schema)}
-                row[0] = timeentryid
+            if len(rows) == 3:
+                terminalTable = self.client.get_table(f"{self.client.project}.{self.dataset_id}.Terminals")
+                entryTimeTable = self.client.get_table(f"{self.client.project}.{self.dataset_id}.EntryTimes")
+                terminals = {x["Name"]:x["ID"] for x in self.client.list_rows(f"{self.client.project}.{self.dataset_id}.Terminals",selected_fields=terminalTable.schema, max_results=50)}
+                timeentryid = [x["ID"] for x in self.client.list_rows(f"{self.client.project}.{self.dataset_id}.EntryTimes",selected_fields=entryTimeTable.schema, max_results=50)]
+                timeentryid = len(timeentryid) + 1
+                print(timeentryid,rows)
+                self.client.insert_rows(entryTimeTable,[[timeentryid,rows[0][0]]])
+                for row in rows:
+                    try:
+                        row[1] = terminals[row[1]]                    
+                    except KeyError:
+                        newTerminalID = 1
+                        if len([x for x in terminals.keys()]) > 0:
+                            newTerminalID = max([x for x in terminals.values()])+1
+                        self.client.insert_rows(terminalTable,[[newTerminalID,row[1]]])
+                        row[1] = newTerminalID
+                        terminals = {x["Name"]:x["ID"] for x in self.client.list_rows(f"{self.client.project}.{self.dataset_id}.Terminals",selected_fields=terminalTable.schema, max_results=50)}
+                    row[0] = timeentryid
 
-        errors = self.client.insert_rows(table, rows)
-        if errors == []:
-            print("New rows have been added.")
+                errors = self.client.insert_rows(table, rows)
+                if errors == []:
+                    print("New rows have been added.")
 
     def getTableData(self,table_id):
         table = self.client.get_table(f"{self.client.project}.{self.dataset_id}.{table_id}")
         if table_id == "EntryInfo":
             fullTableID = lambda x: f"{self.client.project}.{self.dataset_id}.{x}"
             getTable = lambda x: self.client.get_table(fullTableID(x))
-            listRows = lambda x: self.client.list_rows(f"{self.client.project}.{self.dataset_id}.{x.table_id}", selected_fields=x.schema)
+            listRows = lambda x: self.client.list_rows(f"{self.client.project}.{self.dataset_id}.{x.table_id}", selected_fields=x.schema, max_results=50)
             terminalTable = getTable("Terminals")
             terminalQuery = {item["ID"]:item["Name"] for item in listRows(terminalTable)}
             entryTimeTable = getTable("EntryTimes")
@@ -173,7 +173,7 @@ class BaseTool:
     def getAll(self,table_id="EntryInfo"):
         fullTableID = lambda x: f"{self.client.project}.{self.dataset_id}.{x}"
         getTable = lambda x: self.client.get_table(fullTableID(x))
-        listRows = lambda x: self.client.list_rows(f"{self.client.project}.{self.dataset_id}.{x.table_id}", selected_fields=x.schema)
+        listRows = lambda x: self.client.list_rows(f"{self.client.project}.{self.dataset_id}.{x.table_id}", selected_fields=x.schema, max_results=50)
         terminalTable = getTable("Terminals")
         terminalQuery = {item["ID"]:item["Name"] for item in listRows(terminalTable)}
         entryTimeTable = getTable("EntryTimes")
