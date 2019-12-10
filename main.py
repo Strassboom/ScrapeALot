@@ -1,7 +1,11 @@
 from flask import Flask, redirect, render_template, url_for
 from databaseAgent import BaseTool
+import os
+import shutil
+shutil.copy(os.path.abspath("launcher.py"),os.path.abspath("venv\\Lib\\site-packages\\pyppeteer\\launcher.py"))
 from requests_html import HTMLSession, AsyncHTMLSession
 import datetime
+import shutil
 import pyppeteer
 import asyncio
 from lxml import html
@@ -32,12 +36,11 @@ class AsyncHTMLSessionFixed(AsyncHTMLSession):
 
 def tool():
     loop = asyncio.new_event_loop()
-    rows = loop.run_until_complete(getAllData())
+    try:
+        rows = loop.run_until_complete(getAllData())
+    except:
+        rows = loop.run_until_complete(getAllData())
     app.pm.insertTableRows(f"{app.pm.client.project}.{app.pm.dataset_id}.EntryInfo",rows)
-
-scheduler = BackgroundScheduler(daemon=True)
-scheduler.add_job(func=tool, trigger="interval", seconds=20)
-scheduler.start()
 
 app = Flask(__name__)
 
@@ -71,13 +74,13 @@ async def getAllData(session=""):
         percentage = getPercent(row)
         rows.append([timestamp,terminalName,percentage])
     if len(rows) == 0:
-        rows = getAllData(session)
+        rows = await getAllData(session)
     return rows
 
 @app.route('/')
 def home():
-    app.pm = BaseTool()
-    tool()
+    # app.pm = BaseTool()
+    # tool()
     return redirect(url_for('beans'))
 
 @app.route('/beans')
@@ -85,8 +88,14 @@ def beans():
     # loop = asyncio.new_event_loop()
     # rows = loop.run_until_complete(getAllData())
     # app.pm.insertTableRows(f"{app.pm.client.project}.{app.pm.dataset_id}.EntryInfo",rows)
-    rows = app.pm.getTableData("EntryInfo")
+    rows = sorted(app.pm.getTableData("EntryInfo"),key=lambda x:ord(x[1][0]))
     return render_template("parkinginfo.html",rows=rows)
 
+
 if __name__ == "__main__":
+    app.pm = BaseTool()
+    tool()
+    scheduler = BackgroundScheduler(daemon=True)
+    scheduler.add_job(func=tool, trigger="interval", seconds=30)
+    scheduler.start()
     app.run(host='127.0.0.1', port=8080)
