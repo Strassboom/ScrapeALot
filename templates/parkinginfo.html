@@ -1,15 +1,29 @@
 <!DOCTYPE html>
 <html>
     <head>
-
+        <style>
+        table, th, td{
+            width:fit-content;
+            background-color: #22DDDD;
+            border: 1px solid #228888;
+        }
+        </style>
     </head>
     <body>
-        {% for row in rows %}
+        <table>
             <tr>
-                <td>{{ row[0] }}</td>
-                <td>{{ row[1] }}</td>
-                <td>{{ row[2] }}</td>
+                <th>Record from {{ rows[0][0] }}</th>
             </tr>
-        {% endfor %}
+            <tr>
+            {% for row in rows %}
+            <th>{{ row[1] }}</th>
+            {% endfor %}
+            </tr>
+            <tr>
+                {% for row in rows %}
+                <td>{{ row[2] }}</td>
+                {% endfor %}
+            </tr>
+        </table>
     </body>
 </html>
