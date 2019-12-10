@@ -79,7 +79,7 @@ class BaseTool:
 
     def createTable(self,tableInfo):
         tableName = tableInfo[0]
-        table_exists = lambda x: True if x in [d.table_id for d in self.client.list_tables(self.dataset)] else False
+        table_exists = lambda x: True if x in [d.table_id for d in self.client.list_tables(self.client.get_dataset(self.dataset_id))] else False
         if table_exists(tableName):
             print("Table {} Already exists".format(tableName))
         else:
@@ -123,23 +123,52 @@ class BaseTool:
         
         if table_id.split(".")[2] == "EntryInfo":
             terminalTable = self.client.get_table(f"{self.client.project}.{self.dataset_id}.Terminals")
-            entryTable = self.client.get_table(f"{self.client.project}.{self.dataset_id}.EntryTimes")
+            entryTimeTable = self.client.get_table(f"{self.client.project}.{self.dataset_id}.EntryTimes")
             terminals = {x["Name"]:x["ID"] for x in self.client.list_rows(f"{self.client.project}.{self.dataset_id}.Terminals",selected_fields=terminalTable.schema)}
-            timeentryid = [x["ID"] for x in self.client.list_rows(f"{self.client.project}.{self.dataset_id}.EntryTimes",selected_fields=entryTable.schema)]
+            timeentryid = [x["ID"] for x in self.client.list_rows(f"{self.client.project}.{self.dataset_id}.EntryTimes",selected_fields=entryTimeTable.schema)]
             timeentryid = len(timeentryid) + 1
-            self.client.insert_rows(entryTable,[[timeentryid,rows[0][0]]])
+            print(timeentryid,rows)
+            self.client.insert_rows(entryTimeTable,[[timeentryid,rows[0][0]]])
             for row in rows:
                 try:
                     row[1] = terminals[row[1]]                    
                 except KeyError:
-                    newTerminalID = max([x for x in terminals.keys()])+1
+                    newTerminalID = 1
+                    if len([x for x in terminals.keys()]) > 0:
+                        newTerminalID = max([x for x in terminals.values()])+1
                     self.client.insert_rows(terminalTable,[[newTerminalID,row[1]]])
                     row[1] = newTerminalID
+                    terminals = {x["Name"]:x["ID"] for x in self.client.list_rows(f"{self.client.project}.{self.dataset_id}.Terminals",selected_fields=terminalTable.schema)}
                 row[0] = timeentryid
 
         errors = self.client.insert_rows(table, rows)
         if errors == []:
             print("New rows have been added.")
+
+    def getTableData(self,table_id):
+        table = self.client.get_table(f"{self.client.project}.{self.dataset_id}.{table_id}")
+        if table_id == "EntryInfo":
+            fullTableID = lambda x: f"{self.client.project}.{self.dataset_id}.{x}"
+            getTable = lambda x: self.client.get_table(fullTableID(x))
+            listRows = lambda x: self.client.list_rows(f"{self.client.project}.{self.dataset_id}.{x.table_id}", selected_fields=x.schema)
+            terminalTable = getTable("Terminals")
+            terminalQuery = {item["ID"]:item["Name"] for item in listRows(terminalTable)}
+            entryTimeTable = getTable("EntryTimes")
+            entryTimeQuery = {item["ID"]:item["Date"] for item in listRows(entryTimeTable)}
+            latest = max([row for row in listRows(entryTimeTable)], key = lambda x: x["ID"])
+
+            query = f"""
+                SELECT *
+                FROM `{self.client.project}.{self.dataset_id}.EntryInfo`
+                WHERE EntryTimeID = {latest["ID"]}
+            """
+            query_job = self.client.query(query)
+            rows = []
+            fixtime = lambda x: arrow.get(int(entryTimeQuery[x])).to("US/Eastern").format("YYYY MM DD HH mm ss ZZ")
+            for row in query_job.result():
+                rows.append([fixtime(row[0]),terminalQuery[row[1]],row[2]])
+                pass
+            return rows
 
 def fullOperation():
     with BaseTool() as bqClient:

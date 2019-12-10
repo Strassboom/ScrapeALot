@@ -6,6 +6,10 @@ import pyppeteer
 import asyncio
 from lxml import html
 import arrow
+import time
+import atexit
+
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # class ASYNCHTMLSessionFixed copied from:
 # Hosted in requests-html issue 293 https://github.com/psf/requests-html/issues/293
@@ -26,6 +30,14 @@ class AsyncHTMLSessionFixed(AsyncHTMLSession):
 
         return self._browser
 
+def tool():
+    loop = asyncio.new_event_loop()
+    rows = loop.run_until_complete(getAllData())
+    app.pm.insertTableRows(f"{app.pm.client.project}.{app.pm.dataset_id}.EntryInfo",rows)
+
+scheduler = BackgroundScheduler(daemon=True)
+scheduler.add_job(func=tool, trigger="interval", seconds=20)
+scheduler.start()
 
 app = Flask(__name__)
 
@@ -43,10 +55,11 @@ async def getTerminals():
         rows.append([index+1,terminalName])
     return rows
 
-async def getAllData():
+async def getAllData(session=""):
     badwords = ["Terminal","Parking"]
     timestamp = str(arrow.utcnow().timestamp)
-    session = AsyncHTMLSessionFixed()
+    if session == "":
+        session = AsyncHTMLSessionFixed()
     root = await session.get("https://www.laguardiaairport.com/to-from-airport/parking")
     await root.html.arender()
     allTerminals = root.html.xpath('.//div[@id="parkingContent"]/div/div[contains(@class,"term-row")]')
@@ -57,18 +70,22 @@ async def getAllData():
         terminalName = getName(row)
         percentage = getPercent(row)
         rows.append([timestamp,terminalName,percentage])
+    if len(rows) == 0:
+        rows = getAllData(session)
     return rows
 
 @app.route('/')
 def home():
     app.pm = BaseTool()
+    tool()
     return redirect(url_for('beans'))
 
 @app.route('/beans')
 def beans():
-    loop = asyncio.new_event_loop()
-    rows = loop.run_until_complete(getAllData())
-    app.pm.insertTableRows(f"{app.pm.client.project}.{app.pm.dataset_id}.Terminals",rows)
+    # loop = asyncio.new_event_loop()
+    # rows = loop.run_until_complete(getAllData())
+    # app.pm.insertTableRows(f"{app.pm.client.project}.{app.pm.dataset_id}.EntryInfo",rows)
+    rows = app.pm.getTableData("EntryInfo")
     return render_template("parkinginfo.html",rows=rows)
 
 if __name__ == "__main__":
