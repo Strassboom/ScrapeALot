@@ -1,7 +1,7 @@
 Flask==1.1.1
 arrow==0.15.4
 google-cloud-bigquery==1.22.0
-lxml==4.4.2
+lxml==4.6.5
 requests==2.22.0
 requests-html==0.10.0
 urllib3==1.24.3
